@@ -79,6 +79,33 @@ So:
 - **Sparkov has an unnamed index column** as the first column. Drop it.
 - **CIC-IDS2017 has known duplicate rows and some infinite values** in the flow columns. Handle and document both. (See the blank-row quirk above — dropping null-`Label` rows resolves almost all of the duplicates. The remaining infinite values are in `Flow Bytes/s` and `Flow Packets/s`, ~4,376 cells, caused by division by zero in flow-rate calculations.)
 
+### Stage 2 timing test (2026-08-30)
+
+Throwaway scripts (not the real pipeline), minimal ad-hoc cleaning only. Method: time n=5, multiply up to the 200/500-row cap from hard rule 3. XGBoost tested on all three datasets; LSTM/FT-Transformer tested on Sparkov only (14 features, smallest) as a representative case.
+
+**XGBoost — fast everywhere, all three datasets:**
+
+| Dataset | Train | SHAP @500 | LIME @500 | Perm. Importance @500 (n_repeats=5) |
+|---|---|---|---|---|
+| Sparkov (14 feat) | 0.8s | 0.7s | 6.9s (+1.6s setup) | 129s |
+| Sepsis (40 feat) | 1.1s | 0.6s | 8.5s (+5.8s setup) | 147s |
+| CIC-IDS2017 (80 feat) | 3.5s | 0.8s | 21s (+27s setup) | 129s |
+
+**LSTM / FT-Transformer on Sparkov — SHAP is the real cost driver:**
+
+| Method | LSTM @500 | FT-Transformer @500 |
+|---|---|---|
+| SHAP | **244s (~4 min)** | **469s (~8 min)** |
+| LIME | 21s | 66s |
+| Permutation Importance, n_repeats=2 | 25.1s | 26.5s |
+| Permutation Importance, n_repeats=5 | 6.8s | 16.3s |
+
+**Why SHAP is slow for the neural models:** XGBoost gets `shap.TreeExplainer`, an exact fast algorithm specific to tree ensembles. LSTM and FT-Transformer aren't trees, so SHAP falls back to a generic sampling-based explainer that's 300–700x slower on Sparkov alone, and its cost scales with feature count — so Sepsis (40 features) and CIC-IDS2017 (80 features) will be proportionally worse than these Sparkov numbers, not tested directly here.
+
+**Permutation Importance is not the bottleneck.** Confirmed at both n_repeats=2 and n_repeats=5 — PI stayed 10–35x cheaper than SHAP on the same models. (Note: the n_repeats=5 numbers came in faster than n_repeats=2, which shouldn't happen if cost scaled linearly with repeats — likely MPS backend warm-up noise between separate process runs at these sub-second timings, not a real effect. Doesn't change the conclusion.)
+
+**Bottom line:** the full 27-experiment grid is feasible well within a day of compute — no need to rethink scope. But SHAP on the two neural models dominates total runtime by a wide margin, not training, not PI. Decision for Stage 3: cap SHAP at 200 rows (not 500) for LSTM/FT-Transformer specifically, and/or use `shap.GradientExplainer` (PyTorch-specific, much faster than the generic explainer) instead of `shap.Explainer`'s default fallback.
+
 ---
 
 ## Repository layout
@@ -103,9 +130,9 @@ xai-benchmark/
 
 ## Where we are
 
-**Done:** Stage 1 (datasets downloaded and verified) and Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up). Datasets have also been explored end-to-end — see "Confirmed from exploration" above.
+**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), and Stage 2 (throwaway timing test — see "Stage 2 timing test" above). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
 
-**Next:** Stage 2 (a throwaway timing test), then Stage 3 (the real pipeline).
+**Next:** Stage 3 (the real config-driven pipeline).
 
 Full stage list is in `docs/PROJECT_PLAN.md`.
 

@@ -3,6 +3,12 @@
 No pytest dependency (not in requirements.txt yet) -- just run:
     python -m tests.smoke_test
 
+Always runs against configs/dev/*.yaml (small dev_limit), never the
+full-scale configs/*.yaml used for the real run -- otherwise this would
+load the entire multi-GB/multi-million-row datasets on every invocation,
+defeating the point of a fast sanity check. Keep configs/dev/*.yaml in
+sync with their full-scale counterparts if anything else in them changes.
+
 Stage 3 checks: on the dev-limited configs, that each dataset's documented
 split rule actually holds (no leakage across the train/test boundary).
 Stage 4 checks: that each dataset's cleaning quirks actually land.
@@ -18,11 +24,12 @@ from src.pipeline.cleaning import clean
 from src.pipeline.config import load_config
 from src.pipeline.features import reduce_features
 from src.pipeline.loaders import load_raw
+from src.pipeline.models import MODEL_TYPES, train_all
 from src.pipeline.splitting import split
 
 
 def test_sepsis_no_patient_in_both_splits() -> None:
-    config = load_config("configs/sepsis.yaml")
+    config = load_config("configs/dev/sepsis.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
 
@@ -36,7 +43,7 @@ def test_sepsis_no_patient_in_both_splits() -> None:
 
 
 def test_sparkov_uses_the_pretabulated_files_as_is() -> None:
-    config = load_config("configs/sparkov.yaml")
+    config = load_config("configs/dev/sparkov.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
 
@@ -47,7 +54,7 @@ def test_sparkov_uses_the_pretabulated_files_as_is() -> None:
 
 
 def test_cic_train_test_files_dont_mix_weekdays() -> None:
-    config = load_config("configs/cic_ids2017.yaml")
+    config = load_config("configs/dev/cic_ids2017.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
 
@@ -58,7 +65,7 @@ def test_cic_train_test_files_dont_mix_weekdays() -> None:
 
 
 def test_sepsis_cleaning_leaves_no_missing_values() -> None:
-    config = load_config("configs/sepsis.yaml")
+    config = load_config("configs/dev/sepsis.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
     train_df, test_df = clean(train_df, test_df, config)
@@ -69,7 +76,7 @@ def test_sepsis_cleaning_leaves_no_missing_values() -> None:
 
 
 def test_sparkov_cleaning_drops_unnamed_index_only() -> None:
-    config = load_config("configs/sparkov.yaml")
+    config = load_config("configs/dev/sparkov.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
     cleaned_train_df, cleaned_test_df = clean(train_df, test_df, config)
@@ -82,7 +89,7 @@ def test_sparkov_cleaning_drops_unnamed_index_only() -> None:
 
 
 def test_cic_cleaning_removes_duplicates_and_infinite_values() -> None:
-    config = load_config("configs/cic_ids2017.yaml")
+    config = load_config("configs/dev/cic_ids2017.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
     train_df, test_df = clean(train_df, test_df, config)
@@ -90,13 +97,14 @@ def test_cic_cleaning_removes_duplicates_and_infinite_values() -> None:
     for label, part in [("train", train_df), ("test", test_df)]:
         assert part[config.target].isna().sum() == 0, f"{label} still has null-Label rows"
         assert part.duplicated().sum() == 0, f"{label} still has duplicate rows"
+        assert set(part[config.target].unique()) <= {0, 1}, f"{label} target isn't binary 0/1"
         numeric_cols = part.select_dtypes(include=[np.number]).columns
         assert not np.isinf(part[numeric_cols]).any().any(), f"{label} still has infinite values"
     print("OK: cic-ids2017 -- no null-Label rows, duplicates, or infinite values remain")
 
 
 def test_sepsis_reduces_to_25_features() -> None:
-    config = load_config("configs/sepsis.yaml")
+    config = load_config("configs/dev/sepsis.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
     train_df, test_df = clean(train_df, test_df, config)
@@ -108,7 +116,7 @@ def test_sepsis_reduces_to_25_features() -> None:
 
 
 def test_cic_reduces_to_25_features() -> None:
-    config = load_config("configs/cic_ids2017.yaml")
+    config = load_config("configs/dev/cic_ids2017.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
     train_df, test_df = clean(train_df, test_df, config)
@@ -120,7 +128,7 @@ def test_cic_reduces_to_25_features() -> None:
 
 
 def test_sparkov_reduction_excludes_identity_columns_and_hits_target_rate() -> None:
-    config = load_config("configs/sparkov.yaml")
+    config = load_config("configs/dev/sparkov.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
     train_df, test_df = clean(train_df, test_df, config)
@@ -138,6 +146,25 @@ def test_sparkov_reduction_excludes_identity_columns_and_hits_target_rate() -> N
     print(f"OK: sparkov -- reduced to {len(selected)} features, no identity-proxy leakage, {target_rate:.0%} rate hit")
 
 
+def test_all_nine_models_train_and_predict_valid_probabilities() -> None:
+    for config_path in ["configs/dev/sepsis.yaml", "configs/dev/sparkov.yaml", "configs/dev/cic_ids2017.yaml"]:
+        config = load_config(config_path)
+        df = load_raw(config)
+        train_df, test_df = split(df, config)
+        train_df, test_df = clean(train_df, test_df, config)
+        train_df, test_df, selected = reduce_features(train_df, test_df, config)
+        results = train_all(train_df, test_df, selected, config)
+
+        model_types = {r.model_type for r in results}
+        assert model_types == set(MODEL_TYPES), f"{config.name}: expected {MODEL_TYPES}, got {model_types}"
+        for r in results:
+            assert r.n_train_rows == len(train_df)
+            assert r.train_seconds > 0
+            for metric in [r.train_accuracy, r.test_accuracy]:
+                assert 0.0 <= metric <= 1.0, f"{config.name}/{r.model_type}: accuracy {metric} out of [0,1]"
+    print("OK: all 9 model/dataset combinations train and produce valid accuracy/AUC metrics")
+
+
 if __name__ == "__main__":
     test_sepsis_no_patient_in_both_splits()
     test_sparkov_uses_the_pretabulated_files_as_is()
@@ -148,4 +175,5 @@ if __name__ == "__main__":
     test_sepsis_reduces_to_25_features()
     test_cic_reduces_to_25_features()
     test_sparkov_reduction_excludes_identity_columns_and_hits_target_rate()
+    test_all_nine_models_train_and_predict_valid_probabilities()
     print("\nAll smoke tests passed.")

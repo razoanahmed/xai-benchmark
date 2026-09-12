@@ -5,10 +5,12 @@ Usage:
     python -m src.pipeline.run configs/sparkov.yaml
     python -m src.pipeline.run configs/cic_ids2017.yaml
 
-Runs load -> split -> clean -> reduce_features, then prints shapes and
-target distribution so you can sanity-check a dataset without opening a
-notebook. Cleaning runs after splitting so that any train-derived
-statistics (e.g. Sepsis's median fill) never see test rows.
+Runs load -> split -> clean -> reduce_features -> train_all, then prints
+shapes, target distribution, and per-model train/test accuracy and AUC so
+you can sanity-check a dataset without opening a notebook. Cleaning runs
+after splitting so that any train-derived statistics (e.g. Sepsis's
+median fill) never see test rows. Metrics are reported, never tuned
+against (hard rule 2) -- a mediocre model is expected and fine.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from .cleaning import clean
 from .config import load_config
 from .features import reduce_features
 from .loaders import load_raw
+from .models import train_all
 from .splitting import split
 
 
@@ -50,6 +53,15 @@ def main() -> None:
             print(f"[{config.name}]   {label} positive rate: {target_col.mean() * 100:.2f}%")
         else:
             print(f"[{config.name}]   {label} target distribution: {target_col.value_counts().to_dict()}")
+
+    results = train_all(train_df, test_df, selected, config)
+    for r in results:
+        print(
+            f"[{config.name}] {r.model_type:14s} n_train={r.n_train_rows:,} "
+            f"train_time={r.train_seconds:.1f}s "
+            f"train_acc={r.train_accuracy:.3f} train_auc={r.train_auc:.3f} "
+            f"test_acc={r.test_accuracy:.3f} test_auc={r.test_auc:.3f}"
+        )
 
 
 if __name__ == "__main__":

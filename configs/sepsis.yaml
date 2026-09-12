@@ -25,6 +25,6 @@ select:
   seed: 42
 
 dev_limit:
-  # Dev-mode cap so this runs in seconds instead of loading all ~40k files.
-  # Set to null for a real full-dataset run.
-  max_files: 50
+  # null = full dataset (the real run). For a fast dev-mode sanity check,
+  # set max_files back to e.g. 50.
+  max_files: null

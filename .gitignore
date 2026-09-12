@@ -11,4 +11,7 @@ data/processed/*
 results/*
 !results/.gitkeep
 
+models/*
+!models/.gitkeep
+
 .DS_Store

@@ -1,0 +1,23 @@
+# Stage 6 model hyperparameters. Fixed, not tuned (hard rule 2) -- the
+# same values are reused for all three datasets per model type. If adding
+# a dataset requires changing a number here, that's tuning; don't.
+seed: 42
+
+xgboost:
+  n_estimators: 100
+  max_depth: 6
+  learning_rate: 0.1
+
+lstm:
+  # Sequence length is always 1 -- see models.py's module docstring.
+  hidden_size: 64
+  num_layers: 1
+  epochs: 10
+  learning_rate: 0.001
+  batch_size: 256
+
+ft_transformer:
+  n_blocks: 3       # the rtdl_revisiting_models package's own default
+  epochs: 10
+  learning_rate: 0.0001
+  batch_size: 256

@@ -1,0 +1,28 @@
+# Dev-scale copy of ../sepsis.yaml -- same settings, small dev_limit, for
+# fast sanity checks (tests/smoke_test.py uses this one, not the full-scale
+# config). Keep in sync with ../sepsis.yaml if anything else changes there.
+name: sepsis
+format: psv_dir
+
+paths:
+  - data/raw/sepsis/training_setA
+  - data/raw/sepsis/training_setB
+file_glob: "*.psv"
+separator: "|"
+id_from_filename_pattern: "p(\\d+)\\.psv"
+
+target: SepsisLabel
+time_column: ICULOS
+group_column: patient_id
+
+split:
+  method: group
+  test_size: 0.2
+  seed: 42
+
+select:
+  k: 25
+  seed: 42
+
+dev_limit:
+  max_files: 50

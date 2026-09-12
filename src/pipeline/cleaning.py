@@ -74,9 +74,11 @@ def _clean_sparkov(train_df: pd.DataFrame, test_df: pd.DataFrame, config: Datase
 
 def _clean_cic_ids2017(train_df: pd.DataFrame, test_df: pd.DataFrame, config: DatasetConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Drop the blank trailing rows (no Label), drop exact duplicate rows,
-    and drop the handful of rows with an infinite flow-rate value. Each
-    step is small relative to the ~2.8M total rows, so dropping rather
-    than imputing is the simpler, defensible choice here.
+    drop the handful of rows with an infinite flow-rate value, and collapse
+    Label to binary (BENIGN -> 0, any attack type -> 1) per CLAUDE.md's
+    dataset table. Each row-dropping step is small relative to the ~2.8M
+    total rows, so dropping rather than imputing is the simpler, defensible
+    choice here.
     """
 
     def clean_one(df: pd.DataFrame) -> pd.DataFrame:
@@ -86,6 +88,8 @@ def _clean_cic_ids2017(train_df: pd.DataFrame, test_df: pd.DataFrame, config: Da
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         has_inf = np.isinf(df[numeric_cols]).any(axis=1)
         df = df[~has_inf]
+
+        df[config.target] = (df[config.target] != "BENIGN").astype(int)
 
         return df
 

@@ -54,8 +54,7 @@ select:
   seed: 42
 
 dev_limit:
-  # Dev-mode cap: only read this many rows from each of the two files.
-  # 50,000 rather than a smaller number so the dev sample reliably contains
-  # a handful of real fraud rows (fraud rate is ~0.4-0.6%) to downsample
-  # against. Set to null for a real full-dataset run.
-  max_rows_per_file: 50000
+  # null = full dataset (the real run). For a fast dev-mode sanity check,
+  # set max_rows_per_file back to e.g. 50000 (smaller samples risk zero
+  # fraud rows, since the real rate is only ~0.4-0.6%).
+  max_rows_per_file: null

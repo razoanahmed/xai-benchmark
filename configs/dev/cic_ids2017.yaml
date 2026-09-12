@@ -1,6 +1,7 @@
-# CIC-IDS2017 (cybersecurity). Format: 8 CSVs, one per weekday/session.
-# Split is by date: Monday-Wednesday train, Thursday-Friday test.
-# Needs cp1252 encoding (the Label column has an en-dash that isn't valid UTF-8).
+# Dev-scale copy of ../cic_ids2017.yaml -- same settings, small dev_limit,
+# for fast sanity checks (tests/smoke_test.py uses this one, not the
+# full-scale config). Keep in sync with ../cic_ids2017.yaml if anything
+# else changes there.
 name: cic-ids2017
 format: csv_multi
 
@@ -24,22 +25,15 @@ split:
   train_files: ["Monday", "Tuesday", "Wednesday"]
   test_files: ["Thursday", "Friday"]
 
-# Flow ID is a composite string built from the 4-tuple (src ip, dst ip,
-# src port, dst port) -- effectively unique per flow, a pure identifier.
-# Destination IP is excluded for the same reason Source IP is the group
-# column: an address identifies a host, not a generalizable flow pattern.
 feature_exclude:
   - "Flow ID"
   - "Destination IP"
 
 select:
-  # Top-k by mutual information with the target, scored on train only.
   k: 25
   seed: 42
 
 dev_limit:
-  # null = full dataset (the real run). For a fast dev-mode sanity check,
-  # set max_rows_per_file back to e.g. 20000 (smaller samples risk an
-  # all-BENIGN train target, since attacks don't start at the top of a
-  # file -- Tuesday's first attack row is at index 11,347).
-  max_rows_per_file: null
+  # 20,000 rather than a smaller number because attacks don't start at the
+  # top of a file -- Tuesday's first attack row is at index 11,347.
+  max_rows_per_file: 20000

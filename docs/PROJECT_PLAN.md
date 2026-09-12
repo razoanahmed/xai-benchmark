@@ -33,9 +33,9 @@ Split by the rule in `CLAUDE.md` (patient / date / date) — never a random spli
 
 Reduced every dataset using one consistent method: mutual information with the target, scored on training data only, top-k kept. Sepsis and CIC-IDS2017 land at exactly 25 features. Sparkov caps at 21 — most of its raw columns turned out to be per-customer identifiers in disguise (see CLAUDE.md's Stage 5 notes), and standard feature engineering closed most but not all of the gap to 25. Documented as a known limitation rather than padded further. See "Stage 5 feature reduction" in `CLAUDE.md` for the full reasoning, including three rounds of methodology decisions made with the user and two bugs found and fixed during verification.
 
-## Stage 6 — Model training
+## Stage 6 — Model training ✅ DONE
 
-Train XGBoost, LSTM, and FT-Transformer on each dataset (9 models total). No accuracy tuning — a mediocre model is expected and fine.
+Trained XGBoost, LSTM, and FT-Transformer on each dataset (9 models total, all at full scale) with fixed, untuned hyperparameters shared across all three datasets per model type (`configs/models.yaml`). LSTM and FT-Transformer both treat each row as one independent sample, not a sequence, so every model explains the same instance unit for the Stage 7+ comparison. Hit and fixed two real environment bugs along the way (a torch/XGBoost import-order segfault, an FT-Transformer out-of-memory on a large unbatched prediction pass) — see "Stage 6 model training" in `CLAUDE.md` for the full account, including the fixed hyperparameters and full-scale results table. No accuracy tuning was done — the resulting models are mediocre in places (e.g. CIC-IDS2017's neural models overfit, test AUC 0.6-0.74), which is expected and fine.
 
 ## Stage 7 — Explanation generation
 

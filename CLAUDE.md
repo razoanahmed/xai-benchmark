@@ -124,7 +124,7 @@ Filled in `cleaning.py`, which was a deliberate no-op stub through Stage 3. Also
 
 - **Sepsis**: forward-fill each patient's lab columns within their own timeline (sorted by `ICULOS`), then fill whatever's left (a patient's hours before their first reading) with each column's **training-set median**, reused as-is on test. Decided with the user: medians come from train only so test information can't leak into how train gets filled. Edge case found and fixed: in a small dev sample, `EtCO2` and `Bilirubin_direct` had zero non-null values in train, making the median itself `NaN` — added a `.fillna(0)` fallback on the median series so this can't silently leave `NaN` in the output. Verified: 0 missing values remain in train or test after cleaning.
 - **Sparkov**: drops the unnamed index column. That's it as of Stage 5 — see below for why the negative-downsampling described here originally (raising the fraud rate to ~2%) moved out of this stage.
-- **CIC-IDS2017**: drops rows with a null `Label` (the blank trailing-row corruption in the Thursday-morning file), drops exact duplicate rows, then drops rows with an infinite value in any numeric column (not just the two known flow-rate columns, so this doesn't silently miss a new one). Verified directly against the Thursday file: 288,602 null-`Label` rows dropped, 170,366 real rows remain, with exactly 1 duplicate left afterward — matching the numbers in "Known quirks" above.
+- **CIC-IDS2017**: drops rows with a null `Label` (the blank trailing-row corruption in the Thursday-morning file), drops exact duplicate rows, then drops rows with an infinite value in any numeric column (not just the two known flow-rate columns, so this doesn't silently miss a new one). Verified directly against the Thursday file: 288,602 null-`Label` rows dropped, 170,366 real rows remain, with exactly 1 duplicate left afterward — matching the numbers in "Known quirks" above. **Retroactively fixed while planning Stage 6** (bug, not a judgment call): `Label` was left as multi-class strings (`BENIGN`, `FTP-Patator`, `DoS slowloris`, ...) even though the dataset table above already specifies binary (`BENIGN` vs attack → 0/1). Now collapsed to binary int here. Re-ran Stage 5's selection afterward to confirm the feature ranking — it picked the identical 25 features both before and after the fix, on the dev sample tested.
 - Feature reduction to 25 columns (hard rule 6) is explicitly **not** done here — that's Stage 5.
 - `tests/smoke_test.py` extended with one cleaning-invariant check per dataset (no `NaN` left for Sepsis, index column dropped for Sparkov, no duplicates/null-target/infinite values for CIC-IDS2017).
 
@@ -144,6 +144,36 @@ Added `features.py`: one shared selection method — **mutual information with t
 - Two bugs found and fixed while verifying: (1) the identity-proxy exclusion list was initially described but never wired into `configs/sparkov.yaml`, which crashed `mutual_info_classif` on the first string column (`'Mary'`, from `first`) it hit; (2) `city_pop` was missed from that same exclusion list on the first fix. Both are now in `feature_exclude:`.
 - Also bumped CIC-IDS2017's dev_limit from 2,000 to 20,000 rows/file: attacks don't start at the top of a file (Tuesday's first attack row is at index 11,347), so the smaller cap gave Stage 5 an all-`BENIGN` (zero-variance) training target to select against, which is a degenerate case mutual information can't do anything useful with.
 - `tests/smoke_test.py` extended with a 25-or-fewer-features check per dataset, plus a check that none of Sparkov's identity-proxy columns ever reach the final selection.
+- **Introduced `configs/dev/` (not a stage change, a test-infra fix discovered while starting Stage 6):** the checked-in `configs/*.yaml` were always the "real" per-dataset settings, with `dev_limit` temporarily shrunk during development and restored to `null` once a stage was verified. That made `tests/smoke_test.py` (which loaded the same files) slow to the point of loading entire multi-GB datasets on every run, once `dev_limit` got set to `null` for Stage 6's real training. Fixed by adding `configs/dev/*.yaml` — identical settings, small `dev_limit` — which the smoke tests load instead. The full-scale `configs/*.yaml` files stay at `dev_limit: null` permanently from here on.
+
+### Stage 6 model training (2026-09-12)
+
+Added `models.py`: trains XGBoost, LSTM, and FT-Transformer on each dataset's reduced feature table. Fixed hyperparameters only (hard rule 2) — `configs/models.yaml` holds one set of values per model type, reused identically across all three datasets, never tuned per dataset.
+
+- **LSTM and FT-Transformer both treat each row as one independent sample, not a multi-step sequence** — decided with the user specifically so every model explains the same instance unit, which the Stage 7+ cross-model XAI comparison depends on. Confirmed technically first: `rtdl_revisiting_models`'s `FTTransformer.forward()` only accepts a single row's features at all (no sequence dimension), so row-level framing isn't really optional if FT-Transformer and LSTM are meant to be comparable.
+- **A real environment bug, not a code bug:** importing `torch` before XGBoost touches any numpy array — even just building a `DMatrix` — segfaults on this machine every time, confirmed with `faulthandler` (crash inside `xgboost/data.py`'s `_meta_from_numpy`, triggered by import order alone, not data or hyperparameters). Likely a numpy C-API/ABI conflict between this exact torch 2.13.0 / xgboost 3.2.0 / numpy 2.4.6 combination on macOS arm64. Tried `multiprocessing.Pool` with a `spawn` context first (to keep XGBoost in a process that never imports torch) — that avoided the segfault but hung indefinitely for unrelated reasons not worth chasing further. Landed on `xgboost_worker.py`: a module that never imports torch, run as a genuine standalone `subprocess.run` (not multiprocessing), with data passed through temp `.npy`/`.json` files. Verified working with torch already loaded in the parent process.
+- A second real bug found while testing on CIC-IDS2017's larger test set (~100k rows): FT-Transformer's attention cost scales with how many rows go through the network at once, and a single unbatched forward pass over the full test set exhausted MPS memory. Fixed by batching prediction (not just training) in `_predict_proba`.
+- Dev-scale timing (10 epochs, the fixed value in `configs/models.yaml`) showed FT-Transformer as the clear cost driver, consistent with Stage 2's SHAP findings: 2.3s (Sepsis, 1,505 rows) → 18.1s (Sparkov, 22,399 rows) → 53.6s (CIC-IDS2017, 59,894 rows). Extrapolated estimate was ~1 hour total for full-scale training — confirmed with the user before launching, per hard rule 4.
+- Models save to `models/<dataset>/<model_type>.{json,pt}` (gitignored — generated artifacts, not source, same treatment as `data/` and `results/`).
+- `tests/smoke_test.py` extended with a check that all 9 model/dataset combinations train and produce valid (0-1) accuracy/AUC on the dev configs.
+
+**Full-scale training results** (`dev_limit: null`, ran in the background, ~45 min total):
+
+| Dataset | Model | Train rows | Train time | Test accuracy | Test AUC |
+|---|---|---|---|---|---|
+| Sepsis | XGBoost | 1,245,801 | 1.7s | 0.981 | 0.739 |
+| Sepsis | LSTM | 1,245,801 | 92.2s | 0.980 | 0.630 |
+| Sepsis | FT-Transformer | 1,245,801 | 1,055.8s (~18 min) | 0.975 | 0.630 |
+| Sparkov | XGBoost | 375,300 | 1.2s | 0.996 | 0.997 |
+| Sparkov | LSTM | 375,300 | 27.0s | 0.994 | 0.987 |
+| Sparkov | FT-Transformer | 375,300 | 278.5s (~4.6 min) | 0.996 | 0.997 |
+| CIC-IDS2017 | XGBoost | 1,666,481 | 2.4s | 0.819 | 0.802 |
+| CIC-IDS2017 | LSTM | 1,666,481 | 121.8s | 0.807 | 0.615 |
+| CIC-IDS2017 | FT-Transformer | 1,666,481 | 1,507.8s (~25 min) | 0.765 | 0.737 |
+
+Sepsis's train set (1.55M rows) came in larger than the ~1.2M estimate used for the time projection, and CIC-IDS2017's cleaned train set (1.67M rows) larger still — both datasets needed noticeably more of their raw rows than assumed, which is why full-scale FT-Transformer ran longer than the original ~30 min/dataset estimate (closer to ~18-25 min per dataset in practice, not uniformly worse, just different per dataset than the dev-scale extrapolation implied).
+
+None of the AUCs are tuned toward — per hard rule 2, a mediocre model is expected and fine. Worth noting for later stages: CIC-IDS2017's LSTM/FT-Transformer generalize noticeably worse than train (AUC ~1.0 on train vs. 0.6-0.74 on test) — real overfitting, not a bug, consistent with fixed untuned hyperparameters on a dataset this large.
 
 ---
 
@@ -156,17 +186,20 @@ xai-benchmark/
 │   ├── PROJECT_PLAN.md       # the 12 stages and the schedule
 │   ├── METRICS.md            # measurement rules - normative
 │   └── DATASET_SPEECH.md     # supervisor-facing summary
-├── configs/                  # one YAML settings file per dataset (Stage 3+)
+├── configs/                  # one YAML settings file per dataset (Stage 3+), full-scale (dev_limit: null)
 │   ├── sepsis.yaml
 │   ├── sparkov.yaml
-│   └── cic_ids2017.yaml
+│   ├── cic_ids2017.yaml
+│   ├── models.yaml           # Stage 6 fixed hyperparameters, one set per model type, not per dataset
+│   └── dev/                  # same settings, small dev_limit -- what tests/smoke_test.py loads
 ├── data/
 │   ├── raw/                  # untouched downloads - never edit
 │   └── processed/            # cleaned output
+├── models/                   # trained model artifacts (Stage 6+) - gitignored, generated
 ├── src/
-│   └── pipeline/             # shared load/split (Stage 3), per-dataset clean (Stage 4), feature reduction (Stage 5)
+│   └── pipeline/             # shared load/split (Stage 3), per-dataset clean (Stage 4), feature reduction (Stage 5), model training (Stage 6)
 ├── tests/
-│   └── smoke_test.py         # plain-assert split + cleaning + feature-reduction invariant checks, no pytest
+│   └── smoke_test.py         # plain-assert split + cleaning + feature-reduction + training invariant checks, no pytest
 ├── notebooks/
 ├── results/
 └── requirements.txt
@@ -176,9 +209,9 @@ xai-benchmark/
 
 ## Where we are
 
-**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" above), Stage 4 (per-dataset cleaning, 2026-09-12 — see "Stage 4 per-dataset cleaning" above), and Stage 5 (feature reduction, 2026-09-12 — see "Stage 5 feature reduction" above; Sepsis and CIC-IDS2017 land at exactly 25 features, Sparkov caps at 21 — documented limitation, not a bug). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
+**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" above), Stage 4 (per-dataset cleaning, 2026-09-12 — see "Stage 4 per-dataset cleaning" above), Stage 5 (feature reduction, 2026-09-12 — see "Stage 5 feature reduction" above; Sepsis and CIC-IDS2017 land at exactly 25 features, Sparkov caps at 21 — documented limitation, not a bug), and Stage 6 (model training, 2026-09-12 — see "Stage 6 model training" above; all 9 models trained successfully at full scale, artifacts in `models/`). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
 
-**Next:** Stage 6 (train XGBoost, LSTM, and FT-Transformer on each dataset — 9 models total, no accuracy tuning).
+**Next:** Stage 7 (explanation generation: run SHAP, LIME, and Permutation Importance against each of the 9 trained models, capped at 200–500 explained rows per hard rule 3).
 
 Full stage list is in `docs/PROJECT_PLAN.md`.
 

@@ -1,0 +1,42 @@
+# Dev-scale copy of ../sparkov.yaml -- same settings, small dev_limit, for
+# fast sanity checks (tests/smoke_test.py uses this one, not the full-scale
+# config). Keep in sync with ../sparkov.yaml if anything else changes there.
+name: sparkov
+format: csv_pretabulated
+
+train_path: data/raw/sparkov/fraudTrain.csv
+test_path: data/raw/sparkov/fraudTest.csv
+
+target: is_fraud
+time_column: trans_date_trans_time
+group_column: cc_num
+
+split:
+  method: pretabulated
+
+clean:
+  target_positive_rate: 0.02
+  seed: 42
+
+feature_exclude:
+  - "first"
+  - "last"
+  - "street"
+  - "city"
+  - "zip"
+  - "city_pop"
+  - "lat"
+  - "long"
+  - "dob"
+  - "trans_num"
+  - "unix_time"
+
+select:
+  k: 25
+  seed: 42
+
+dev_limit:
+  # 50,000 rather than a smaller number so the dev sample reliably contains
+  # a handful of real fraud rows (fraud rate is ~0.4-0.6%) to downsample
+  # against.
+  max_rows_per_file: 50000

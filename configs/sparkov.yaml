@@ -14,7 +14,16 @@ group_column: cc_num
 split:
   method: pretabulated
 
+clean:
+  # Negatives get downsampled within train and within test independently,
+  # each to this rate, so both sides carry enough fraud cases for SHAP/LIME
+  # (capped at 200-500 explained rows) to have something to explain.
+  target_positive_rate: 0.02
+  seed: 42
+
 dev_limit:
   # Dev-mode cap: only read this many rows from each of the two files.
-  # Set to null for a real full-dataset run.
-  max_rows_per_file: 2000
+  # 50,000 rather than a smaller number so the dev sample reliably contains
+  # a handful of real fraud rows (fraud rate is ~0.4-0.6%) to downsample
+  # against. Set to null for a real full-dataset run.
+  max_rows_per_file: 50000

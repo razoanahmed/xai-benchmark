@@ -5,9 +5,10 @@ Usage:
     python -m src.pipeline.run configs/sparkov.yaml
     python -m src.pipeline.run configs/cic_ids2017.yaml
 
-Runs load -> clean (currently a no-op, see cleaning.py) -> split, then
-prints shapes and target distribution so you can sanity-check a dataset
-without opening a notebook.
+Runs load -> split -> clean, then prints shapes and target distribution
+so you can sanity-check a dataset without opening a notebook. Cleaning
+runs after splitting so that any train-derived statistics (e.g. Sepsis's
+median fill) never see test rows.
 """
 
 from __future__ import annotations
@@ -33,10 +34,11 @@ def main() -> None:
     df = load_raw(config)
     print(f"[{config.name}] loaded {len(df):,} rows, {df.shape[1]} columns")
 
-    df = clean(df, config)
-
     train_df, test_df = split(df, config)
     print(f"[{config.name}] split: train={len(train_df):,} rows, test={len(test_df):,} rows")
+
+    train_df, test_df = clean(train_df, test_df, config)
+    print(f"[{config.name}] cleaned: train={len(train_df):,} rows, test={len(test_df):,} rows")
 
     for label, part in [("train", train_df), ("test", test_df)]:
         target_col = part[config.target]

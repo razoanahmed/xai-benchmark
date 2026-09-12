@@ -18,16 +18,16 @@ Run a tiny end-to-end slice (n=5) of loading → model fit → one explanation m
 
 ## Stage 3 — Config-driven pipeline skeleton ✅ DONE
 
-Built the pipeline so a dataset is a settings file (paths, time column, group column, target, split rule), not new code. Loading, cleaning, and splitting logic are shared across all three datasets via `src/pipeline/`, driven by `configs/*.yaml`. See "Stage 3 pipeline skeleton" in `CLAUDE.md` for details. Cleaning is currently a deliberate no-op stub — the real per-dataset quirks are Stage 4.
+Built the pipeline so a dataset is a settings file (paths, time column, group column, target, split rule), not new code. Loading and splitting logic are shared across all three datasets via `src/pipeline/`, driven by `configs/*.yaml`. See "Stage 3 pipeline skeleton" in `CLAUDE.md` for details. Cleaning was a deliberate no-op stub at this point — the real per-dataset quirks were Stage 4.
 
-## Stage 4 — Per-dataset preprocessing
+## Stage 4 — Per-dataset preprocessing ✅ DONE
 
-Apply the documented quirks per dataset:
-- Sepsis: `sep='|'`, extract patient ID from filename.
-- Sparkov: drop unnamed index column, downsample negatives to raise positive rate to ~2%.
-- CIC-IDS2017: strip leading spaces from column names, drop duplicate rows, handle infinite values in flow columns.
+Applied the documented quirks per dataset in `src/pipeline/cleaning.py`:
+- Sepsis: forward-fill lab columns within each patient's timeline, then fill remaining gaps with training-set medians.
+- Sparkov: drop unnamed index column, downsample negatives within train and test independently to raise positive rate to ~2% on both sides.
+- CIC-IDS2017: drop null-`Label` rows, drop duplicate rows, drop rows with an infinite value in any numeric column.
 
-Split by the rule in `CLAUDE.md` (patient / date / date) — never a random split.
+Split by the rule in `CLAUDE.md` (patient / date / date) — never a random split — already handled in Stage 3; cleaning now runs after splitting so Sepsis's median fill only ever sees training data. See "Stage 4 per-dataset cleaning" in `CLAUDE.md` for details, including the two methodology calls made with the user (downsample both splits for Sparkov; train-median fill for Sepsis) and the degenerate all-missing-column edge case found and fixed.
 
 ## Stage 5 — Feature reduction
 

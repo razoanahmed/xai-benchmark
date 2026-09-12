@@ -108,16 +108,25 @@ Throwaway scripts (not the real pipeline), minimal ad-hoc cleaning only. Method:
 
 ### Stage 3 pipeline skeleton (2026-09-12)
 
-Shared `load → clean (stub) → split` pipeline in `src/pipeline/`, driven entirely by the YAML files in `configs/`. Adding a 4th dataset that fits one of the three shapes below needs a new config only, no new code.
+Shared `load → split → clean` pipeline in `src/pipeline/`, driven entirely by the YAML files in `configs/`. Adding a 4th dataset that fits one of the three shapes below needs a new config only, no new code. (Cleaning runs *after* splitting — see Stage 4 below for why.)
 
 - **`config.py`** — loads a dataset's YAML into a `DatasetConfig`, validates required keys are present.
 - **`loaders.py`** — one loader per raw-data *shape*, not per dataset: `psv_dir` (Sepsis: many small per-entity files, entity ID parsed from the filename), `csv_pretabulated` (Sparkov: exactly two files, already pre-split), `csv_multi` (CIC-IDS2017: several files concatenated, split decided later). Strips whitespace from column names generically on load (harmless for Sepsis/Sparkov, fixes CIC-IDS2017's `" Source IP"`-style names) — this is generic hygiene, not a dataset-specific quirk, so it lives here rather than waiting for Stage 4.
-- **`cleaning.py`** — **currently a no-op stub on purpose.** The real per-dataset quirks (Sparkov downsampling, CIC-IDS2017 dedup/infinite-value handling, Sepsis lab forward-fill) are Stage 4 work and go here next.
 - **`splitting.py`** — three split methods, matching the three documented split rules: `group` (whole entities to one side, e.g. Sepsis patients — entity *assignment* is randomized, but no entity's rows ever cross the boundary, so this does not violate hard rule 1), `pretabulated` (honor Sparkov's pre-split files as-is), `filename_group` (assign whole source files to train/test by name, e.g. CIC-IDS2017 Mon–Wed vs Thu–Fri).
 - **`run.py`** — CLI: `python -m src.pipeline.run configs/<name>.yaml`. Prints row/column counts, split sizes, and target distribution.
 - Every config has a `dev_limit` (max files for Sepsis, max rows/file for Sparkov and CIC-IDS2017) so pipeline runs during development take seconds, not the full runtime. Set to `null` for a real run.
 - `tests/smoke_test.py` checks the split invariant that actually matters per dataset (no patient in both Sepsis splits, no leftover leakage columns for Sparkov/CIC-IDS2017). No `pytest` dependency — plain asserts, run via `python -m tests.smoke_test`.
 - Verified end-to-end on dev-limited configs for all three datasets before considering the stage done.
+
+### Stage 4 per-dataset cleaning (2026-09-12)
+
+Filled in `cleaning.py`, which was a deliberate no-op stub through Stage 3. Also **reordered the pipeline to `load → split → clean`** (it was `load → clean → split` in Stage 3) — cleaning needs train-only statistics for Sepsis's median fill, and the Sepsis train/test split isn't known until `split()` runs (it randomly assigns whole patients), so cleaning has to come after.
+
+- **Sepsis**: forward-fill each patient's lab columns within their own timeline (sorted by `ICULOS`), then fill whatever's left (a patient's hours before their first reading) with each column's **training-set median**, reused as-is on test. Decided with the user: medians come from train only so test information can't leak into how train gets filled. Edge case found and fixed: in a small dev sample, `EtCO2` and `Bilirubin_direct` had zero non-null values in train, making the median itself `NaN` — added a `.fillna(0)` fallback on the median series so this can't silently leave `NaN` in the output. Verified: 0 missing values remain in train or test after cleaning.
+- **Sparkov**: drops the unnamed index column, then downsamples negatives **within train and within test independently**, each to `clean.target_positive_rate` (2%, set in `configs/sparkov.yaml`). Decided with the user: downsample both sides, not just train — at the raw ~0.4–0.6% rate, a 200–500 row SHAP/LIME sample would contain almost no fraud cases to explain. Verified: both splits land within 0.1% of the 2% target.
+- **CIC-IDS2017**: drops rows with a null `Label` (the blank trailing-row corruption in the Thursday-morning file), drops exact duplicate rows, then drops rows with an infinite value in any numeric column (not just the two known flow-rate columns, so this doesn't silently miss a new one). Verified directly against the Thursday file: 288,602 null-`Label` rows dropped, 170,366 real rows remain, with exactly 1 duplicate left afterward — matching the numbers in "Known quirks" above.
+- Feature reduction to 25 columns (hard rule 6) is explicitly **not** done here — that's Stage 5.
+- `tests/smoke_test.py` extended with one cleaning-invariant check per dataset (no `NaN` left for Sepsis, target rate hit for Sparkov, no duplicates/null-target/infinite values for CIC-IDS2017).
 
 ---
 
@@ -138,9 +147,9 @@ xai-benchmark/
 │   ├── raw/                  # untouched downloads - never edit
 │   └── processed/            # cleaned output
 ├── src/
-│   └── pipeline/             # shared load -> clean -> split code (Stage 3+)
+│   └── pipeline/             # shared load -> split code (Stage 3), per-dataset clean code (Stage 4)
 ├── tests/
-│   └── smoke_test.py         # plain-assert split-invariant checks, no pytest
+│   └── smoke_test.py         # plain-assert split + cleaning invariant checks, no pytest
 ├── notebooks/
 ├── results/
 └── requirements.txt
@@ -150,9 +159,9 @@ xai-benchmark/
 
 ## Where we are
 
-**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), and Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" below). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
+**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" above), and Stage 4 (per-dataset cleaning, 2026-09-12 — see "Stage 4 per-dataset cleaning" above). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
 
-**Next:** Stage 4 (per-dataset preprocessing: fill in `src/pipeline/cleaning.py`, currently a no-op stub, with the real quirks per dataset listed under "Known quirks" above).
+**Next:** Stage 5 (reduce every dataset to exactly 25 features, using one consistent method across all three).
 
 Full stage list is in `docs/PROJECT_PLAN.md`.
 

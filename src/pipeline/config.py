@@ -54,6 +54,7 @@ class DatasetConfig:
     encoding: str = "utf-8"
     id_from_filename_pattern: str | None = None
     dev_limit: DevLimit = field(default_factory=DevLimit)
+    clean_params: dict[str, Any] = field(default_factory=dict)
 
     def resolve_path(self, relative_path: str) -> Path:
         path = Path(relative_path)
@@ -102,4 +103,5 @@ def load_config(config_path: str | Path) -> DatasetConfig:
         encoding=raw.get("encoding", "utf-8"),
         id_from_filename_pattern=raw.get("id_from_filename_pattern"),
         dev_limit=dev_limit,
+        clean_params=raw.get("clean") or {},
     )

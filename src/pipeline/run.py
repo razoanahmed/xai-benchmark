@@ -5,10 +5,10 @@ Usage:
     python -m src.pipeline.run configs/sparkov.yaml
     python -m src.pipeline.run configs/cic_ids2017.yaml
 
-Runs load -> split -> clean, then prints shapes and target distribution
-so you can sanity-check a dataset without opening a notebook. Cleaning
-runs after splitting so that any train-derived statistics (e.g. Sepsis's
-median fill) never see test rows.
+Runs load -> split -> clean -> reduce_features, then prints shapes and
+target distribution so you can sanity-check a dataset without opening a
+notebook. Cleaning runs after splitting so that any train-derived
+statistics (e.g. Sepsis's median fill) never see test rows.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import pandas as pd
 
 from .cleaning import clean
 from .config import load_config
+from .features import reduce_features
 from .loaders import load_raw
 from .splitting import split
 
@@ -39,6 +40,9 @@ def main() -> None:
 
     train_df, test_df = clean(train_df, test_df, config)
     print(f"[{config.name}] cleaned: train={len(train_df):,} rows, test={len(test_df):,} rows")
+
+    train_df, test_df, selected = reduce_features(train_df, test_df, config)
+    print(f"[{config.name}] reduced to {len(selected)} features: {selected}")
 
     for label, part in [("train", train_df), ("test", test_df)]:
         target_col = part[config.target]

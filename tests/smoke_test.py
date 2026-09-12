@@ -1,4 +1,4 @@
-"""Plain-assert smoke tests for the Stage 3/4 pipeline.
+"""Plain-assert smoke tests for the Stage 3/4/5 pipeline.
 
 No pytest dependency (not in requirements.txt yet) -- just run:
     python -m tests.smoke_test
@@ -6,6 +6,8 @@ No pytest dependency (not in requirements.txt yet) -- just run:
 Stage 3 checks: on the dev-limited configs, that each dataset's documented
 split rule actually holds (no leakage across the train/test boundary).
 Stage 4 checks: that each dataset's cleaning quirks actually land.
+Stage 5 checks: that feature reduction caps at 25 (or fewer, for Sparkov)
+and that Sparkov's identity-proxy columns never make it into the selection.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import numpy as np
 
 from src.pipeline.cleaning import clean
 from src.pipeline.config import load_config
+from src.pipeline.features import reduce_features
 from src.pipeline.loaders import load_raw
 from src.pipeline.splitting import split
 
@@ -65,17 +68,17 @@ def test_sepsis_cleaning_leaves_no_missing_values() -> None:
     print("OK: sepsis -- no missing values remain after cleaning")
 
 
-def test_sparkov_cleaning_hits_target_positive_rate() -> None:
+def test_sparkov_cleaning_drops_unnamed_index_only() -> None:
     config = load_config("configs/sparkov.yaml")
     df = load_raw(config)
     train_df, test_df = split(df, config)
-    train_df, test_df = clean(train_df, test_df, config)
+    cleaned_train_df, cleaned_test_df = clean(train_df, test_df, config)
 
-    target_rate = config.clean_params.get("target_positive_rate", 0.02)
-    for label, part in [("train", train_df), ("test", test_df)]:
-        rate = part[config.target].mean()
-        assert abs(rate - target_rate) < 0.001, f"{label} positive rate {rate:.4f} isn't close to target {target_rate}"
-    print("OK: sparkov -- downsampling hits the target positive rate on both sides")
+    assert not any(c.startswith("Unnamed") for c in cleaned_train_df.columns)
+    # Downsampling moved to Stage 5 -- clean() alone must not drop any rows.
+    assert len(cleaned_train_df) == len(train_df)
+    assert len(cleaned_test_df) == len(test_df)
+    print("OK: sparkov -- cleaning only drops the unnamed index column, no rows")
 
 
 def test_cic_cleaning_removes_duplicates_and_infinite_values() -> None:
@@ -92,11 +95,57 @@ def test_cic_cleaning_removes_duplicates_and_infinite_values() -> None:
     print("OK: cic-ids2017 -- no null-Label rows, duplicates, or infinite values remain")
 
 
+def test_sepsis_reduces_to_25_features() -> None:
+    config = load_config("configs/sepsis.yaml")
+    df = load_raw(config)
+    train_df, test_df = split(df, config)
+    train_df, test_df = clean(train_df, test_df, config)
+    train_df, test_df, selected = reduce_features(train_df, test_df, config)
+
+    assert len(selected) == 25, f"expected exactly 25 features, got {len(selected)}"
+    assert set(selected) <= set(train_df.columns) and set(selected) <= set(test_df.columns)
+    print("OK: sepsis -- reduced to exactly 25 features")
+
+
+def test_cic_reduces_to_25_features() -> None:
+    config = load_config("configs/cic_ids2017.yaml")
+    df = load_raw(config)
+    train_df, test_df = split(df, config)
+    train_df, test_df = clean(train_df, test_df, config)
+    train_df, test_df, selected = reduce_features(train_df, test_df, config)
+
+    assert len(selected) == 25, f"expected exactly 25 features, got {len(selected)}"
+    assert "Flow ID" not in selected and "Destination IP" not in selected
+    print("OK: cic-ids2017 -- reduced to exactly 25 features, identifier columns excluded")
+
+
+def test_sparkov_reduction_excludes_identity_columns_and_hits_target_rate() -> None:
+    config = load_config("configs/sparkov.yaml")
+    df = load_raw(config)
+    train_df, test_df = split(df, config)
+    train_df, test_df = clean(train_df, test_df, config)
+    train_df, test_df, selected = reduce_features(train_df, test_df, config)
+
+    assert len(selected) <= 25, f"expected at most 25 features, got {len(selected)}"
+    identity_proxies = {"first", "last", "street", "city", "zip", "city_pop", "lat", "long", "dob", "trans_num", "unix_time"}
+    leaked = identity_proxies & set(selected)
+    assert not leaked, f"identity-proxy columns leaked into selection: {leaked}"
+
+    target_rate = config.clean_params.get("target_positive_rate", 0.02)
+    for label, part in [("train", train_df), ("test", test_df)]:
+        rate = part[config.target].mean()
+        assert abs(rate - target_rate) < 0.001, f"{label} positive rate {rate:.4f} isn't close to target {target_rate}"
+    print(f"OK: sparkov -- reduced to {len(selected)} features, no identity-proxy leakage, {target_rate:.0%} rate hit")
+
+
 if __name__ == "__main__":
     test_sepsis_no_patient_in_both_splits()
     test_sparkov_uses_the_pretabulated_files_as_is()
     test_cic_train_test_files_dont_mix_weekdays()
     test_sepsis_cleaning_leaves_no_missing_values()
-    test_sparkov_cleaning_hits_target_positive_rate()
+    test_sparkov_cleaning_drops_unnamed_index_only()
     test_cic_cleaning_removes_duplicates_and_infinite_values()
+    test_sepsis_reduces_to_25_features()
+    test_cic_reduces_to_25_features()
+    test_sparkov_reduction_excludes_identity_columns_and_hits_target_rate()
     print("\nAll smoke tests passed.")

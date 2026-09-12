@@ -18,7 +18,39 @@ clean:
   # Negatives get downsampled within train and within test independently,
   # each to this rate, so both sides carry enough fraud cases for SHAP/LIME
   # (capped at 200-500 explained rows) to have something to explain.
+  # Runs at the END of Stage 5 (features.py), not Stage 4 -- see CLAUDE.md.
   target_positive_rate: 0.02
+  seed: 42
+
+# first/last/street/city/zip/dob/trans_num all have ~970-983 unique values
+# out of ~983 distinct cardholders -- they identify a customer, not a
+# generalizable pattern. city_pop is a deterministic lookup from city (same
+# city -> same population), so it inherits the same problem. lat/long have
+# it too, but age and distance_km (derived from dob and lat/long in
+# features.py) deliberately coarsen them into values many customers can
+# share. unix_time is excluded because it's the same information as
+# trans_date_trans_time (the time column) in a different format. See
+# CLAUDE.md's Stage 5 notes.
+feature_exclude:
+  - "first"
+  - "last"
+  - "street"
+  - "city"
+  - "zip"
+  - "city_pop"
+  - "lat"
+  - "long"
+  - "dob"
+  - "trans_num"
+  - "unix_time"
+
+select:
+  # Top-k by mutual information with the target, scored on train only.
+  # Sparkov's real candidate pool (8 raw + 13 engineered) is only 21 wide
+  # after excluding per-customer identity columns -- see CLAUDE.md's
+  # Stage 5 notes. k: 25 here is a ceiling, not a guarantee; with fewer
+  # than 25 candidates, every one of them gets kept.
+  k: 25
   seed: 42
 
 dev_limit:

@@ -29,9 +29,9 @@ Applied the documented quirks per dataset in `src/pipeline/cleaning.py`:
 
 Split by the rule in `CLAUDE.md` (patient / date / date) — never a random split — already handled in Stage 3; cleaning now runs after splitting so Sepsis's median fill only ever sees training data. See "Stage 4 per-dataset cleaning" in `CLAUDE.md` for details, including the two methodology calls made with the user (downsample both splits for Sparkov; train-median fill for Sepsis) and the degenerate all-missing-column edge case found and fixed.
 
-## Stage 5 — Feature reduction
+## Stage 5 — Feature reduction ✅ DONE
 
-Reduce every dataset to exactly 25 features, using one consistent method across all three.
+Reduced every dataset using one consistent method: mutual information with the target, scored on training data only, top-k kept. Sepsis and CIC-IDS2017 land at exactly 25 features. Sparkov caps at 21 — most of its raw columns turned out to be per-customer identifiers in disguise (see CLAUDE.md's Stage 5 notes), and standard feature engineering closed most but not all of the gap to 25. Documented as a known limitation rather than padded further. See "Stage 5 feature reduction" in `CLAUDE.md` for the full reasoning, including three rounds of methodology decisions made with the user and two bugs found and fixed during verification.
 
 ## Stage 6 — Model training
 

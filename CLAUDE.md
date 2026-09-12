@@ -123,10 +123,27 @@ Shared `load → split → clean` pipeline in `src/pipeline/`, driven entirely b
 Filled in `cleaning.py`, which was a deliberate no-op stub through Stage 3. Also **reordered the pipeline to `load → split → clean`** (it was `load → clean → split` in Stage 3) — cleaning needs train-only statistics for Sepsis's median fill, and the Sepsis train/test split isn't known until `split()` runs (it randomly assigns whole patients), so cleaning has to come after.
 
 - **Sepsis**: forward-fill each patient's lab columns within their own timeline (sorted by `ICULOS`), then fill whatever's left (a patient's hours before their first reading) with each column's **training-set median**, reused as-is on test. Decided with the user: medians come from train only so test information can't leak into how train gets filled. Edge case found and fixed: in a small dev sample, `EtCO2` and `Bilirubin_direct` had zero non-null values in train, making the median itself `NaN` — added a `.fillna(0)` fallback on the median series so this can't silently leave `NaN` in the output. Verified: 0 missing values remain in train or test after cleaning.
-- **Sparkov**: drops the unnamed index column, then downsamples negatives **within train and within test independently**, each to `clean.target_positive_rate` (2%, set in `configs/sparkov.yaml`). Decided with the user: downsample both sides, not just train — at the raw ~0.4–0.6% rate, a 200–500 row SHAP/LIME sample would contain almost no fraud cases to explain. Verified: both splits land within 0.1% of the 2% target.
+- **Sparkov**: drops the unnamed index column. That's it as of Stage 5 — see below for why the negative-downsampling described here originally (raising the fraud rate to ~2%) moved out of this stage.
 - **CIC-IDS2017**: drops rows with a null `Label` (the blank trailing-row corruption in the Thursday-morning file), drops exact duplicate rows, then drops rows with an infinite value in any numeric column (not just the two known flow-rate columns, so this doesn't silently miss a new one). Verified directly against the Thursday file: 288,602 null-`Label` rows dropped, 170,366 real rows remain, with exactly 1 duplicate left afterward — matching the numbers in "Known quirks" above.
 - Feature reduction to 25 columns (hard rule 6) is explicitly **not** done here — that's Stage 5.
-- `tests/smoke_test.py` extended with one cleaning-invariant check per dataset (no `NaN` left for Sepsis, target rate hit for Sparkov, no duplicates/null-target/infinite values for CIC-IDS2017).
+- `tests/smoke_test.py` extended with one cleaning-invariant check per dataset (no `NaN` left for Sepsis, index column dropped for Sparkov, no duplicates/null-target/infinite values for CIC-IDS2017).
+
+### Stage 5 feature reduction (2026-09-12)
+
+Added `features.py`: one shared selection method — **mutual information with the target, scored on training data only, top-k kept** (decided with the user over a quick-model-importance alternative, specifically because MI doesn't favor any one of the three model types over the other two). What differs per dataset is the *candidate pool* the selector picks from, not the selector itself.
+
+- **Sepsis**: no extra work needed — all 39 non-target/time/group columns are legitimate clinical features. Straightforward 39 → 25.
+- **CIC-IDS2017**: excludes `Flow ID` (a composite string built from the flow's 4-tuple, effectively unique per flow) and `Destination IP` in addition to the already-excluded target/time/group columns, via a new `feature_exclude:` config list. 80 real candidates → 25. `Destination Port`/`Source Port` were kept as candidates (legitimately predictive in intrusion detection, not identifiers the way an IP address is) and both made the final 25.
+- **Sparkov — the hard case.** Checking actual cardinalities (not just documented ones) found that `lat`, `long`, `city`, `zip`, `dob`, `street` all have ~968–983 unique values against ~983 distinct cardholders in training — they're not shared categories, they're alternate identifiers for the customer, same problem as `cc_num` (already excluded). `city_pop` is a deterministic lookup from `city`, so it inherits the problem. Only **8 raw columns** survive that triage (`merchant`, `category`, `amt`, `gender`, `state`, `job`, `merch_lat`, `merch_long`). Decided with the user (two rounds of discussion, as the size of the gap became clearer): derive standard, well-precedented engineered features rather than lower the bar on identity-proxies or exempt Sparkov from the 25-feature rule:
+  - `age` (from `dob`) and `distance_km` (haversine between cardholder and merchant coordinates) — these deliberately *coarsen* an identity-like input into a value many customers can share, unlike the raw column they come from.
+  - Calendar features: `hour_of_day`, `day_of_week`, `month`, `day_of_month`, `is_weekend`, `is_night`.
+  - Card-velocity features, each causal (only ever looks at a card's own *prior* transactions, via `shift(1)` before an expanding window): `card_txn_count_so_far`, `card_amt_dev_from_own_mean`, `card_amt_dev_from_own_max`. Plus two train-fit deviation features, `category_amt_dev_from_mean` and `merchant_amt_dev_from_mean`.
+  - `merchant`/`category`/`gender`/`state`/`job` are frequency-encoded (each category → its rank by how common it is in train; decided with the user over one-hot, which would've exploded `merchant`/`job` into hundreds of dummy columns and muddied what "25 features" means).
+  - **Final candidate pool: 21** (8 raw + 13 engineered) — still short of 25 even after this. Decided with the user: report this honestly rather than keep inventing features to reach a number. `select.k: 25` in `configs/sparkov.yaml` is documented as a ceiling, not a guarantee.
+  - **Negative-downsampling moved here from Stage 4**, and now runs as the *last* step, after the candidate pool is built and selected. Reason: the card-velocity features need each card's real, undownsampled transaction history to mean anything — computing them after Stage 4's downsampling would have undercounted every card's history by whatever fraction of its rows got dropped. This is a retroactive fix to how Stage 4 was structured, made necessary by something Stage 5 discovered, not a Stage 4 mistake that was visible at the time.
+- Two bugs found and fixed while verifying: (1) the identity-proxy exclusion list was initially described but never wired into `configs/sparkov.yaml`, which crashed `mutual_info_classif` on the first string column (`'Mary'`, from `first`) it hit; (2) `city_pop` was missed from that same exclusion list on the first fix. Both are now in `feature_exclude:`.
+- Also bumped CIC-IDS2017's dev_limit from 2,000 to 20,000 rows/file: attacks don't start at the top of a file (Tuesday's first attack row is at index 11,347), so the smaller cap gave Stage 5 an all-`BENIGN` (zero-variance) training target to select against, which is a degenerate case mutual information can't do anything useful with.
+- `tests/smoke_test.py` extended with a 25-or-fewer-features check per dataset, plus a check that none of Sparkov's identity-proxy columns ever reach the final selection.
 
 ---
 
@@ -147,9 +164,9 @@ xai-benchmark/
 │   ├── raw/                  # untouched downloads - never edit
 │   └── processed/            # cleaned output
 ├── src/
-│   └── pipeline/             # shared load -> split code (Stage 3), per-dataset clean code (Stage 4)
+│   └── pipeline/             # shared load/split (Stage 3), per-dataset clean (Stage 4), feature reduction (Stage 5)
 ├── tests/
-│   └── smoke_test.py         # plain-assert split + cleaning invariant checks, no pytest
+│   └── smoke_test.py         # plain-assert split + cleaning + feature-reduction invariant checks, no pytest
 ├── notebooks/
 ├── results/
 └── requirements.txt
@@ -159,9 +176,9 @@ xai-benchmark/
 
 ## Where we are
 
-**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" above), and Stage 4 (per-dataset cleaning, 2026-09-12 — see "Stage 4 per-dataset cleaning" above). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
+**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" above), Stage 4 (per-dataset cleaning, 2026-09-12 — see "Stage 4 per-dataset cleaning" above), and Stage 5 (feature reduction, 2026-09-12 — see "Stage 5 feature reduction" above; Sepsis and CIC-IDS2017 land at exactly 25 features, Sparkov caps at 21 — documented limitation, not a bug). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
 
-**Next:** Stage 5 (reduce every dataset to exactly 25 features, using one consistent method across all three).
+**Next:** Stage 6 (train XGBoost, LSTM, and FT-Transformer on each dataset — 9 models total, no accuracy tuning).
 
 Full stage list is in `docs/PROJECT_PLAN.md`.
 

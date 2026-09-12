@@ -55,6 +55,8 @@ class DatasetConfig:
     id_from_filename_pattern: str | None = None
     dev_limit: DevLimit = field(default_factory=DevLimit)
     clean_params: dict[str, Any] = field(default_factory=dict)
+    select_params: dict[str, Any] = field(default_factory=dict)
+    feature_exclude: list[str] = field(default_factory=list)
 
     def resolve_path(self, relative_path: str) -> Path:
         path = Path(relative_path)
@@ -104,4 +106,6 @@ def load_config(config_path: str | Path) -> DatasetConfig:
         id_from_filename_pattern=raw.get("id_from_filename_pattern"),
         dev_limit=dev_limit,
         clean_params=raw.get("clean") or {},
+        select_params=raw.get("select") or {},
+        feature_exclude=raw.get("feature_exclude") or [],
     )

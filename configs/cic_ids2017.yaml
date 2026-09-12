@@ -24,7 +24,23 @@ split:
   train_files: ["Monday", "Tuesday", "Wednesday"]
   test_files: ["Thursday", "Friday"]
 
+# Flow ID is a composite string built from the 4-tuple (src ip, dst ip,
+# src port, dst port) -- effectively unique per flow, a pure identifier.
+# Destination IP is excluded for the same reason Source IP is the group
+# column: an address identifies a host, not a generalizable flow pattern.
+feature_exclude:
+  - "Flow ID"
+  - "Destination IP"
+
+select:
+  # Top-k by mutual information with the target, scored on train only.
+  k: 25
+  seed: 42
+
 dev_limit:
   # Dev-mode cap: only read this many rows from the top of each file.
-  # Set to null for a real full-dataset run.
-  max_rows_per_file: 2000
+  # 20,000 rather than a smaller number because attacks don't start at the
+  # top of a file -- Tuesday's first attack row is at index 11,347,  so a
+  # smaller cap would give Stage 5's selection an all-BENIGN (zero-variance)
+  # train target and nothing meaningful to rank. Set to null for a real run.
+  max_rows_per_file: 20000

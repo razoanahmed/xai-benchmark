@@ -56,35 +56,20 @@ def _clean_sepsis(train_df: pd.DataFrame, test_df: pd.DataFrame, config: Dataset
 
 
 def _clean_sparkov(train_df: pd.DataFrame, test_df: pd.DataFrame, config: DatasetConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Drop the unnamed index column Sparkov's CSVs ship with, then downsample
-    negatives within train and within test independently so each side's
-    fraud rate rises from its real ~0.4-0.6% to the target rate. Downsampling
-    train and test separately (rather than only train) keeps enough fraud
-    rows in the test side too -- at the raw rate, a 200-500 row SHAP/LIME
-    sample would barely contain any fraud cases to explain.
+    """Drop the unnamed index column Sparkov's CSVs ship with.
+
+    Negative-downsampling (raising the fraud rate to ~2%) used to happen
+    here too, but moved to Stage 5 (features.py): several of the engineered
+    features there (e.g. a card's transaction count so far) need each
+    card's full, undownsampled history to be accurate. Downsampling now
+    runs as the last step of Stage 5, after those features are computed.
     """
-    target_rate = config.clean_params.get("target_positive_rate", 0.02)
-    seed = config.clean_params.get("seed")
 
     def drop_unnamed_index(df: pd.DataFrame) -> pd.DataFrame:
         unnamed_cols = [c for c in df.columns if c.startswith("Unnamed")]
         return df.drop(columns=unnamed_cols)
 
-    def downsample_negatives(df: pd.DataFrame) -> pd.DataFrame:
-        positives = df[df[config.target] == 1]
-        negatives = df[df[config.target] == 0]
-
-        n_negatives_to_keep = int(len(positives) * (1 - target_rate) / target_rate)
-        n_negatives_to_keep = min(n_negatives_to_keep, len(negatives))
-
-        rng = np.random.default_rng(seed)
-        keep_idx = rng.choice(negatives.index, size=n_negatives_to_keep, replace=False)
-
-        return pd.concat([positives, negatives.loc[keep_idx]]).sort_index()
-
-    train_df = downsample_negatives(drop_unnamed_index(train_df))
-    test_df = downsample_negatives(drop_unnamed_index(test_df))
-    return train_df, test_df
+    return drop_unnamed_index(train_df), drop_unnamed_index(test_df)
 
 
 def _clean_cic_ids2017(train_df: pd.DataFrame, test_df: pd.DataFrame, config: DatasetConfig) -> tuple[pd.DataFrame, pd.DataFrame]:

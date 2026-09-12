@@ -16,9 +16,9 @@ All three datasets (Sepsis, Sparkov, CIC-IDS2017) downloaded and verified into `
 
 Run a tiny end-to-end slice (n=5) of loading → model fit → one explanation method, per dataset, just to measure wall-clock time. Multiply up to estimate full-run cost before committing to Stage 3+. This is a scratch script, not part of the real pipeline — do not build on top of it.
 
-## Stage 3 — Config-driven pipeline skeleton
+## Stage 3 — Config-driven pipeline skeleton ✅ DONE
 
-Build the pipeline so a dataset is a settings file (paths, time column, group column, target, split rule), not new code. Loading, cleaning, and splitting logic must be shared across all three datasets. If adding a dataset later requires new code, this stage was built wrong.
+Built the pipeline so a dataset is a settings file (paths, time column, group column, target, split rule), not new code. Loading, cleaning, and splitting logic are shared across all three datasets via `src/pipeline/`, driven by `configs/*.yaml`. See "Stage 3 pipeline skeleton" in `CLAUDE.md` for details. Cleaning is currently a deliberate no-op stub — the real per-dataset quirks are Stage 4.
 
 ## Stage 4 — Per-dataset preprocessing
 

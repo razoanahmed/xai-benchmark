@@ -1,0 +1,25 @@
+# Sepsis (healthcare). Format: one .psv (pipe-separated) file per patient,
+# spread across two folders. Patient ID lives in the filename, not in the file.
+name: sepsis
+format: psv_dir
+
+paths:
+  - data/raw/sepsis/training_setA
+  - data/raw/sepsis/training_setB
+file_glob: "*.psv"
+separator: "|"
+id_from_filename_pattern: "p(\\d+)\\.psv"
+
+target: SepsisLabel
+time_column: ICULOS
+group_column: patient_id
+
+split:
+  method: group       # whole patients go to train or test, never split mid-patient
+  test_size: 0.2
+  seed: 42
+
+dev_limit:
+  # Dev-mode cap so this runs in seconds instead of loading all ~40k files.
+  # Set to null for a real full-dataset run.
+  max_files: 50

@@ -1,0 +1,30 @@
+# CIC-IDS2017 (cybersecurity). Format: 8 CSVs, one per weekday/session.
+# Split is by date: Monday-Wednesday train, Thursday-Friday test.
+# Needs cp1252 encoding (the Label column has an en-dash that isn't valid UTF-8).
+name: cic-ids2017
+format: csv_multi
+
+paths:
+  - data/raw/cic-ids2017/Monday-WorkingHours.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Tuesday-WorkingHours.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Wednesday-workingHours.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Friday-WorkingHours-Morning.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+  - data/raw/cic-ids2017/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+encoding: cp1252
+
+target: Label
+time_column: Timestamp
+group_column: Source IP
+
+split:
+  method: filename_group
+  train_files: ["Monday", "Tuesday", "Wednesday"]
+  test_files: ["Thursday", "Friday"]
+
+dev_limit:
+  # Dev-mode cap: only read this many rows from the top of each file.
+  # Set to null for a real full-dataset run.
+  max_rows_per_file: 2000

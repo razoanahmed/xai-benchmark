@@ -106,6 +106,19 @@ Throwaway scripts (not the real pipeline), minimal ad-hoc cleaning only. Method:
 
 **Bottom line:** the full 27-experiment grid is feasible well within a day of compute — no need to rethink scope. But SHAP on the two neural models dominates total runtime by a wide margin, not training, not PI. Decision for Stage 3: cap SHAP at 200 rows (not 500) for LSTM/FT-Transformer specifically, and/or use `shap.GradientExplainer` (PyTorch-specific, much faster than the generic explainer) instead of `shap.Explainer`'s default fallback.
 
+### Stage 3 pipeline skeleton (2026-09-12)
+
+Shared `load → clean (stub) → split` pipeline in `src/pipeline/`, driven entirely by the YAML files in `configs/`. Adding a 4th dataset that fits one of the three shapes below needs a new config only, no new code.
+
+- **`config.py`** — loads a dataset's YAML into a `DatasetConfig`, validates required keys are present.
+- **`loaders.py`** — one loader per raw-data *shape*, not per dataset: `psv_dir` (Sepsis: many small per-entity files, entity ID parsed from the filename), `csv_pretabulated` (Sparkov: exactly two files, already pre-split), `csv_multi` (CIC-IDS2017: several files concatenated, split decided later). Strips whitespace from column names generically on load (harmless for Sepsis/Sparkov, fixes CIC-IDS2017's `" Source IP"`-style names) — this is generic hygiene, not a dataset-specific quirk, so it lives here rather than waiting for Stage 4.
+- **`cleaning.py`** — **currently a no-op stub on purpose.** The real per-dataset quirks (Sparkov downsampling, CIC-IDS2017 dedup/infinite-value handling, Sepsis lab forward-fill) are Stage 4 work and go here next.
+- **`splitting.py`** — three split methods, matching the three documented split rules: `group` (whole entities to one side, e.g. Sepsis patients — entity *assignment* is randomized, but no entity's rows ever cross the boundary, so this does not violate hard rule 1), `pretabulated` (honor Sparkov's pre-split files as-is), `filename_group` (assign whole source files to train/test by name, e.g. CIC-IDS2017 Mon–Wed vs Thu–Fri).
+- **`run.py`** — CLI: `python -m src.pipeline.run configs/<name>.yaml`. Prints row/column counts, split sizes, and target distribution.
+- Every config has a `dev_limit` (max files for Sepsis, max rows/file for Sparkov and CIC-IDS2017) so pipeline runs during development take seconds, not the full runtime. Set to `null` for a real run.
+- `tests/smoke_test.py` checks the split invariant that actually matters per dataset (no patient in both Sepsis splits, no leftover leakage columns for Sparkov/CIC-IDS2017). No `pytest` dependency — plain asserts, run via `python -m tests.smoke_test`.
+- Verified end-to-end on dev-limited configs for all three datasets before considering the stage done.
+
 ---
 
 ## Repository layout
@@ -117,10 +130,17 @@ xai-benchmark/
 │   ├── PROJECT_PLAN.md       # the 12 stages and the schedule
 │   ├── METRICS.md            # measurement rules - normative
 │   └── DATASET_SPEECH.md     # supervisor-facing summary
+├── configs/                  # one YAML settings file per dataset (Stage 3+)
+│   ├── sepsis.yaml
+│   ├── sparkov.yaml
+│   └── cic_ids2017.yaml
 ├── data/
 │   ├── raw/                  # untouched downloads - never edit
 │   └── processed/            # cleaned output
 ├── src/
+│   └── pipeline/             # shared load -> clean -> split code (Stage 3+)
+├── tests/
+│   └── smoke_test.py         # plain-assert split-invariant checks, no pytest
 ├── notebooks/
 ├── results/
 └── requirements.txt
@@ -130,9 +150,9 @@ xai-benchmark/
 
 ## Where we are
 
-**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), and Stage 2 (throwaway timing test — see "Stage 2 timing test" above). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
+**Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), and Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" below). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
 
-**Next:** Stage 3 (the real config-driven pipeline).
+**Next:** Stage 4 (per-dataset preprocessing: fill in `src/pipeline/cleaning.py`, currently a no-op stub, with the real quirks per dataset listed under "Known quirks" above).
 
 Full stage list is in `docs/PROJECT_PLAN.md`.
 

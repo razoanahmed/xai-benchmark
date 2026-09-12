@@ -1,0 +1,20 @@
+# Sparkov (finance). Format: two CSVs, already pre-split by date by the
+# dataset's creators (fraudTrain covers 2019-01-01..2020-06-21, fraudTest
+# picks up right after). No re-splitting needed -- just use the two files.
+name: sparkov
+format: csv_pretabulated
+
+train_path: data/raw/sparkov/fraudTrain.csv
+test_path: data/raw/sparkov/fraudTest.csv
+
+target: is_fraud
+time_column: trans_date_trans_time
+group_column: cc_num
+
+split:
+  method: pretabulated
+
+dev_limit:
+  # Dev-mode cap: only read this many rows from each of the two files.
+  # Set to null for a real full-dataset run.
+  max_rows_per_file: 2000

@@ -211,7 +211,7 @@ xai-benchmark/
 
 **Done:** Stage 0 (Python 3.11 environment, `requirements.txt`, repo/GitHub set up), Stage 1 (datasets downloaded and verified, explored end-to-end — see "Confirmed from exploration" above), Stage 2 (throwaway timing test — see "Stage 2 timing test" above), Stage 3 (config-driven pipeline skeleton, 2026-09-12 — see "Stage 3 pipeline skeleton" above), Stage 4 (per-dataset cleaning, 2026-09-12 — see "Stage 4 per-dataset cleaning" above), Stage 5 (feature reduction, 2026-09-12 — see "Stage 5 feature reduction" above; Sepsis and CIC-IDS2017 land at exactly 25 features, Sparkov caps at 21 — documented limitation, not a bug), and Stage 6 (model training, 2026-09-12 — see "Stage 6 model training" above; all 9 models trained successfully at full scale, artifacts in `models/`). The 27-experiment grid is confirmed feasible; SHAP on LSTM/FT-Transformer is the dominant cost.
 
-**Next:** Stage 7 (explanation generation: run SHAP, LIME, and Permutation Importance against each of the 9 trained models, capped at 200–500 explained rows per hard rule 3).
+**Next:** Stage 6.5 (AWS SageMaker setup — see `docs/PROJECT_PLAN.md`, added 2026-09-12), then Stage 7 (explanation generation, now run entirely on SageMaker Processing Jobs on one instance type, capped at 200–500 explained rows per hard rule 3).
 
 Full stage list is in `docs/PROJECT_PLAN.md`.
 

@@ -1,6 +1,6 @@
 # PROJECT_PLAN.md — Stage Schedule
 
-**Status: DRAFT.** This is a proposed 12-stage breakdown based on the rules and grid in `CLAUDE.md`. It has not been checked against your supervisor's actual plan — review and correct before treating it as normative.
+**Status: DRAFT.** This is a proposed 13-stage breakdown (0 through 12, plus 6.5) based on the rules and grid in `CLAUDE.md`. It has not been checked against your supervisor's actual plan — review and correct before treating it as normative.
 
 ---
 
@@ -37,9 +37,17 @@ Reduced every dataset using one consistent method: mutual information with the t
 
 Trained XGBoost, LSTM, and FT-Transformer on each dataset (9 models total, all at full scale) with fixed, untuned hyperparameters shared across all three datasets per model type (`configs/models.yaml`). LSTM and FT-Transformer both treat each row as one independent sample, not a sequence, so every model explains the same instance unit for the Stage 7+ comparison. Hit and fixed two real environment bugs along the way (a torch/XGBoost import-order segfault, an FT-Transformer out-of-memory on a large unbatched prediction pass) — see "Stage 6 model training" in `CLAUDE.md` for the full account, including the fixed hyperparameters and full-scale results table. No accuracy tuning was done — the resulting models are mediocre in places (e.g. CIC-IDS2017's neural models overfit, test AUC 0.6-0.74), which is expected and fine.
 
+## Stage 6.5 — SageMaker setup
+
+Set up the AWS side before any explanation work runs on it: S3 bucket, IAM role, upload the processed data and the 9 trained models from Stage 6 to S3, and verify a Processing Job runs end to end on a trivial smoke test before trusting it with the real Stage 7 sweep. Training (Stage 6) stays local — training time is not one of this project's metrics, so there's no reason to pay for it on AWS.
+
 ## Stage 7 — Explanation generation
 
-Run SHAP, LIME, and Permutation Importance against each trained model. Cap SHAP/LIME at 200–500 explained rows. This produces the 27 experiment cells (3 datasets × 3 models × 3 XAI methods).
+Run SHAP, LIME, and Permutation Importance against each trained model, entirely on AWS SageMaker as Processing Jobs. Cap SHAP/LIME at 200–500 explained rows. This produces the 27 experiment cells (3 datasets × 3 models × 3 XAI methods).
+
+**Hard rule: all 27 cells run on the same SageMaker instance type, with none run locally.** Mixing local and SageMaker runs (or mixing instance types across cells) invalidates the Stage 9 cost comparison — cost and runtime are only comparable across cells if the hardware is held constant. Pick the instance type once, for the whole sweep, before starting.
+
+**Reproducibility:** record the exact instance type used (e.g. `ml.m5.xlarge`) in the results. Anyone re-running this benchmark needs to know what hardware the cost/runtime numbers came from.
 
 ## Stage 8 — Explanation quality metrics
 
@@ -47,7 +55,7 @@ Compute the quality metrics defined in `docs/METRICS.md`. **`METRICS.md` does no
 
 ## Stage 9 — Computational cost metrics
 
-Record runtime and memory cost for each XAI method run in Stage 7.
+Record runtime, memory, and **cost in dollars** for each XAI method run in Stage 7. Runtime comes for free once Stage 7 runs on SageMaker — each Processing Job reports its own duration, so there's no separate timing step to build. Dollar cost = job duration × the recorded instance type's per-second SageMaker price.
 
 ## Stage 10 — Rank-based comparison
 
@@ -67,4 +75,5 @@ Produce the supervisor-facing summary (`docs/DATASET_SPEECH.md`) and final resul
 
 1. `docs/METRICS.md` doesn't exist — needed before Stage 8.
 2. `docs/DATASET_SPEECH.md` doesn't exist — needed for Stage 12, may be useful earlier too.
-3. Confirm this 12-stage breakdown matches whatever your supervisor actually assigned — this draft was inferred from `CLAUDE.md`, not sourced from a syllabus or supervisor doc.
+3. Confirm this 13-stage breakdown matches whatever your supervisor actually assigned — this draft was inferred from `CLAUDE.md`, not sourced from a syllabus or supervisor doc.
+4. Stage 6.5's AWS resources (S3 bucket, IAM role) and Stage 7's instance type aren't chosen yet. Razoan is handling all AWS Console/credential work directly — Claude will provide exact console steps when Stage 6.5 starts, but won't touch credentials or do anything requiring AWS keys. Estimated full Stage 7 cost (see 2026-09-12 discussion, scaled from Stage 2's timing numbers): roughly $1-3, well inside the <$100 budget — dominated by per-job startup overhead across 27 Processing Jobs, not actual compute.

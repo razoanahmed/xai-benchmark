@@ -1,0 +1,23 @@
+# Extra packages Stage 7's SageMaker Processing container needs on top of
+# whatever the base PyTorch framework image already ships (torch, numpy,
+# pandas, scikit-learn). Installed automatically by FrameworkProcessor
+# before run_stage7_cell.py executes.
+#
+# numpy<2 pinned deliberately, and load-bearing this time (an earlier
+# attempt at this pin was reverted -- see git history / CLAUDE.md's Stage 7
+# notes for that dead end). The real bug: this container's pre-built torch
+# was compiled against numpy 1.x. Letting pip upgrade numpy to 2.x breaks
+# torch's OWN `.numpy()` bridge process-wide (RuntimeError: Numpy is not
+# available), not just some unrelated package -- this crashed every SHAP
+# cell on the two neural models (GradientExplainer needs tensor.numpy()),
+# while XGBoost's SHAP path was unaffected since TreeExplainer never
+# touches a torch tensor. shap==0.51.0 hard-requires numpy>=2 (introduced
+# at 0.50.0), which is *why* pip was upgrading numpy in the first place --
+# pinned to 0.49.1 instead, the newest release that doesn't force numpy>=2.
+numpy<2
+xgboost==3.2.0
+shap==0.49.1
+lime==0.2.0.1
+rtdl_revisiting_models==0.0.2
+PyYAML==6.0.3
+boto3==1.43.93

@@ -14,4 +14,6 @@ results/*
 models/*
 !models/.gitkeep
 
+.cache/
+
 .DS_Store

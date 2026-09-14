@@ -1,0 +1,16 @@
+# Stage 6.5 -- AWS resources for uploading processed data/models and, in
+# Stage 7, running the 27-cell explanation sweep as SageMaker Processing
+# Jobs. Bucket name and role ARN are identifiers, not secrets -- safe to
+# commit. Never put access keys or secret keys in this file or anywhere
+# else in the repo; those stay in Razoan's local AWS CLI config only.
+
+region: ca-central-1
+s3_bucket: directed-study-sagemaker-project
+sagemaker_role_arn: arn:aws:iam::496488676588:role/directed-study-sagemaker-iamrole
+
+# Hard rule (docs/PROJECT_PLAN.md Stage 7): all 27 experiment cells must run
+# on the same instance type, so cost/runtime stay comparable across cells.
+# Chosen for the Stage 7 sweep -- see CLAUDE.md's Stage 6.5 discussion for
+# the cost estimate and reasoning (CPU-only is enough; row caps are 200-500
+# per cell, no training happens on SageMaker).
+instance_type: ml.m5.xlarge

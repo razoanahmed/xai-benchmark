@@ -24,7 +24,7 @@ from src.pipeline.cleaning import clean
 from src.pipeline.config import load_config
 from src.pipeline.features import reduce_features
 from src.pipeline.loaders import load_raw
-from src.pipeline.models import MODEL_TYPES, train_all
+from src.pipeline.models import MODEL_TYPES, MODELS_DIR, train_all
 from src.pipeline.splitting import split
 
 
@@ -165,6 +165,44 @@ def test_all_nine_models_train_and_predict_valid_probabilities() -> None:
     print("OK: all 9 model/dataset combinations train and produce valid accuracy/AUC metrics")
 
 
+def test_dev_training_never_touches_real_model_directory() -> None:
+    """Regression test for the bug that clobbered Stage 6's full-scale
+    models: this test used to call train_all() with a dev config and write
+    straight into models/<dataset>/, silently overwriting the real,
+    full-scale artifacts sharing that path. models.py now routes any run
+    with a non-null dev_limit to models/dev/<dataset>/ instead -- this
+    proves it, without requiring real trained models to be present (it
+    plants a sentinel file if the real directory is empty, and leaves any
+    real file it finds completely untouched, verified byte-for-byte).
+    """
+    config = load_config("configs/dev/sepsis.yaml")
+    real_dir = MODELS_DIR / config.name
+    dev_dir = MODELS_DIR / "dev" / config.name
+    real_dir.mkdir(parents=True, exist_ok=True)
+
+    sentinel = real_dir / "xgboost.json"
+    pre_existing = sentinel.exists()
+    if not pre_existing:
+        sentinel.write_text('{"sentinel": "planted-by-smoke-test"}')
+    original_content = sentinel.read_bytes()
+    original_mtime = sentinel.stat().st_mtime
+
+    df = load_raw(config)
+    train_df, test_df = split(df, config)
+    train_df, test_df = clean(train_df, test_df, config)
+    train_df, test_df, selected = reduce_features(train_df, test_df, config)
+    train_all(train_df, test_df, selected, config)
+
+    assert sentinel.read_bytes() == original_content, "dev run overwrote a file in the real models/ directory"
+    assert sentinel.stat().st_mtime == original_mtime, "dev run modified a file in the real models/ directory"
+    assert (dev_dir / "xgboost.json").exists(), "dev run should write to models/dev/<dataset>/ instead"
+    assert (dev_dir / "lstm.pt").exists() and (dev_dir / "ft_transformer.pt").exists()
+
+    if not pre_existing:
+        sentinel.unlink()
+    print("OK: dev-scale training writes to models/dev/, real models/ directory left untouched")
+
+
 if __name__ == "__main__":
     test_sepsis_no_patient_in_both_splits()
     test_sparkov_uses_the_pretabulated_files_as_is()
@@ -176,4 +214,5 @@ if __name__ == "__main__":
     test_cic_reduces_to_25_features()
     test_sparkov_reduction_excludes_identity_columns_and_hits_target_rate()
     test_all_nine_models_train_and_predict_valid_probabilities()
+    test_dev_training_never_touches_real_model_directory()
     print("\nAll smoke tests passed.")

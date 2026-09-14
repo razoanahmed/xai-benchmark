@@ -1,0 +1,218 @@
+{
+  "sepsis/xgboost/shap": {
+    "dataset": "sepsis",
+    "model_type": "xgboost",
+    "method": "shap",
+    "job_name": "stage7-sepsis-xgboost-shap-2026-09-14-03-02-04-394",
+    "status": "SUCCEEDED",
+    "wall_seconds": 333.11877179145813
+  },
+  "sepsis/xgboost/lime": {
+    "dataset": "sepsis",
+    "model_type": "xgboost",
+    "method": "lime",
+    "job_name": "stage7-sepsis-xgboost-lime-2026-09-14-03-07-37-548",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.4723961353302
+  },
+  "sepsis/xgboost/permutation_importance": {
+    "dataset": "sepsis",
+    "model_type": "xgboost",
+    "method": "permutation_importance",
+    "job_name": "stage7-sepsis-xgboost-permutation-impor-2026-09-14-03-13-09-935",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.91758012771606
+  },
+  "sepsis/lstm/shap": {
+    "dataset": "sepsis",
+    "model_type": "lstm",
+    "method": "shap",
+    "job_name": "stage7-sepsis-lstm-shap-2026-09-14-03-18-41-945",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.7274007797241
+  },
+  "sepsis/lstm/lime": {
+    "dataset": "sepsis",
+    "model_type": "lstm",
+    "method": "lime",
+    "job_name": "stage7-sepsis-lstm-lime-2026-09-14-03-24-13-720",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.16475796699524
+  },
+  "sepsis/lstm/permutation_importance": {
+    "dataset": "sepsis",
+    "model_type": "lstm",
+    "method": "permutation_importance",
+    "job_name": "stage7-sepsis-lstm-permutation-importan-2026-09-14-03-29-45-749",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.3655309677124
+  },
+  "sepsis/ft_transformer/shap": {
+    "dataset": "sepsis",
+    "model_type": "ft_transformer",
+    "method": "shap",
+    "job_name": "stage7-sepsis-ft-transformer-shap-2026-09-14-03-35-18-208",
+    "status": "SUCCEEDED",
+    "wall_seconds": 333.27737402915955
+  },
+  "sepsis/ft_transformer/lime": {
+    "dataset": "sepsis",
+    "model_type": "ft_transformer",
+    "method": "lime",
+    "job_name": "stage7-sepsis-ft-transformer-lime-2026-09-14-03-40-51-530",
+    "status": "SUCCEEDED",
+    "wall_seconds": 1988.974503993988
+  },
+  "sepsis/ft_transformer/permutation_importance": {
+    "dataset": "sepsis",
+    "model_type": "ft_transformer",
+    "method": "permutation_importance",
+    "job_name": "stage7-sepsis-ft-transformer-permutatio-2026-09-14-04-14-00-494",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.91007018089294
+  },
+  "sparkov/xgboost/shap": {
+    "dataset": "sparkov",
+    "model_type": "xgboost",
+    "method": "shap",
+    "job_name": "stage7-sparkov-xgboost-shap-2026-09-14-04-19-33-376",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.640349149704
+  },
+  "sparkov/xgboost/lime": {
+    "dataset": "sparkov",
+    "model_type": "xgboost",
+    "method": "lime",
+    "job_name": "stage7-sparkov-xgboost-lime-2026-09-14-04-25-05-081",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.48323488235474
+  },
+  "sparkov/xgboost/permutation_importance": {
+    "dataset": "sparkov",
+    "model_type": "xgboost",
+    "method": "permutation_importance",
+    "job_name": "stage7-sparkov-xgboost-permutation-impo-2026-09-14-04-30-36-512",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.61628007888794
+  },
+  "sparkov/lstm/shap": {
+    "dataset": "sparkov",
+    "model_type": "lstm",
+    "method": "shap",
+    "job_name": "stage7-sparkov-lstm-shap-2026-09-14-04-36-08-167",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.29824805259705
+  },
+  "sparkov/lstm/lime": {
+    "dataset": "sparkov",
+    "model_type": "lstm",
+    "method": "lime",
+    "job_name": "stage7-sparkov-lstm-lime-2026-09-14-04-41-39-336",
+    "status": "SUCCEEDED",
+    "wall_seconds": 330.9885950088501
+  },
+  "sparkov/lstm/permutation_importance": {
+    "dataset": "sparkov",
+    "model_type": "lstm",
+    "method": "permutation_importance",
+    "job_name": "stage7-sparkov-lstm-permutation-importa-2026-09-14-04-47-10-419",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.8261601924896
+  },
+  "sparkov/ft_transformer/shap": {
+    "dataset": "sparkov",
+    "model_type": "ft_transformer",
+    "method": "shap",
+    "job_name": "stage7-sparkov-ft-transformer-shap-2026-09-14-04-52-42-173",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.5370829105377
+  },
+  "sparkov/ft_transformer/lime": {
+    "dataset": "sparkov",
+    "model_type": "ft_transformer",
+    "method": "lime",
+    "job_name": "stage7-sparkov-ft-transformer-lime-2026-09-14-04-58-13-778",
+    "status": "SUCCEEDED",
+    "wall_seconds": 1677.1068217754364
+  },
+  "sparkov/ft_transformer/permutation_importance": {
+    "dataset": "sparkov",
+    "model_type": "ft_transformer",
+    "method": "permutation_importance",
+    "job_name": "stage7-sparkov-ft-transformer-permutati-2026-09-14-05-26-10-936",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.2392179965973
+  },
+  "cic-ids2017/xgboost/shap": {
+    "dataset": "cic-ids2017",
+    "model_type": "xgboost",
+    "method": "shap",
+    "job_name": "stage7-cic-ids2017-xgboost-shap-2026-09-14-05-31-43-148",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.74556612968445
+  },
+  "cic-ids2017/xgboost/lime": {
+    "dataset": "cic-ids2017",
+    "model_type": "xgboost",
+    "method": "lime",
+    "job_name": "stage7-cic-ids2017-xgboost-lime-2026-09-14-05-37-15-792",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.6160657405853
+  },
+  "cic-ids2017/xgboost/permutation_importance": {
+    "dataset": "cic-ids2017",
+    "model_type": "xgboost",
+    "method": "permutation_importance",
+    "job_name": "stage7-cic-ids2017-xgboost-permutation--2026-09-14-05-42-47-522",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.14099502563477
+  },
+  "cic-ids2017/lstm/shap": {
+    "dataset": "cic-ids2017",
+    "model_type": "lstm",
+    "method": "shap",
+    "job_name": "stage7-cic-ids2017-lstm-shap-2026-09-14-05-48-19-552",
+    "status": "SUCCEEDED",
+    "wall_seconds": 332.2394161224365
+  },
+  "cic-ids2017/lstm/lime": {
+    "dataset": "cic-ids2017",
+    "model_type": "lstm",
+    "method": "lime",
+    "job_name": "stage7-cic-ids2017-lstm-lime-2026-09-14-05-53-51-907",
+    "status": "SUCCEEDED",
+    "wall_seconds": 330.84841203689575
+  },
+  "cic-ids2017/lstm/permutation_importance": {
+    "dataset": "cic-ids2017",
+    "model_type": "lstm",
+    "method": "permutation_importance",
+    "job_name": "stage7-cic-ids2017-lstm-permutation-imp-2026-09-14-05-59-22-749",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.59285616874695
+  },
+  "cic-ids2017/ft_transformer/shap": {
+    "dataset": "cic-ids2017",
+    "model_type": "ft_transformer",
+    "method": "shap",
+    "job_name": "stage7-cic-ids2017-ft-transformer-shap-2026-09-14-06-04-54-239",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.44117403030396
+  },
+  "cic-ids2017/ft_transformer/lime": {
+    "dataset": "cic-ids2017",
+    "model_type": "ft_transformer",
+    "method": "lime",
+    "job_name": "stage7-cic-ids2017-ft-transformer-lime-2026-09-14-06-10-25-822",
+    "status": "SUCCEEDED",
+    "wall_seconds": 1989.8848338127136
+  },
+  "cic-ids2017/ft_transformer/permutation_importance": {
+    "dataset": "cic-ids2017",
+    "model_type": "ft_transformer",
+    "method": "permutation_importance",
+    "job_name": "stage7-cic-ids2017-ft-transformer-permu-2026-09-14-06-43-35-709",
+    "status": "SUCCEEDED",
+    "wall_seconds": 331.69968008995056
+  }
+}

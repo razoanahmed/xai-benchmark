@@ -50,6 +50,21 @@ MODELS_DIR = REPO_ROOT / "models"
 MODEL_TYPES = ["xgboost", "lstm", "ft_transformer"]
 
 
+def _is_dev_run(config: DatasetConfig) -> bool:
+    return config.dev_limit.max_files is not None or config.dev_limit.max_rows_per_file is not None
+
+
+def _output_dir(config: DatasetConfig) -> Path:
+    """Dev-limited runs (configs/dev/*.yaml) write here instead of the real
+    models/<dataset>/ path, so a smoke-test run can never overwrite the real,
+    full-scale models a dev run happens to share a dataset name with -- this
+    is exactly how the full-scale Stage 6 models got silently clobbered by a
+    later smoke-test run before this fix.
+    """
+    base = MODELS_DIR / "dev" if _is_dev_run(config) else MODELS_DIR
+    return base / config.name
+
+
 @dataclass
 class TrainResult:
     model_type: str
@@ -96,17 +111,18 @@ def _train_one(
     X_test = test_df[selected_features].to_numpy(dtype=np.float32)
     y_test = test_df[config.target].to_numpy(dtype=np.int64)
 
+    out_dir = _output_dir(config)
     seed = model_config["seed"]
     start = time.time()
     if model_type == "xgboost":
         # Saves straight to its final destination itself -- see _train_xgboost.
-        train_pred, test_pred = _train_xgboost(X_train, y_train, X_test, model_config["xgboost"], seed, config.name)
+        train_pred, test_pred = _train_xgboost(X_train, y_train, X_test, model_config["xgboost"], seed, out_dir)
     elif model_type == "lstm":
         model, train_pred, test_pred = _train_lstm(X_train, y_train, X_test, model_config["lstm"], seed)
-        _save_model(model, config.name, model_type)
+        _save_model(model, out_dir, model_type)
     elif model_type == "ft_transformer":
         model, train_pred, test_pred = _train_ft_transformer(X_train, y_train, X_test, model_config["ft_transformer"], seed)
-        _save_model(model, config.name, model_type)
+        _save_model(model, out_dir, model_type)
     else:
         raise ValueError(f"Unknown model type: {model_type!r}")
     elapsed = time.time() - start
@@ -130,7 +146,7 @@ def _safe_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
 
 
 def _train_xgboost(
-    X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, params: dict[str, Any], seed: int, dataset_name: str
+    X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, params: dict[str, Any], seed: int, out_dir: Path
 ) -> tuple[np.ndarray, np.ndarray]:
     """Runs xgboost_worker.py as a genuine standalone subprocess, which
     never imports torch -- see that module's docstring for why. Data
@@ -151,7 +167,6 @@ def _train_xgboost(
             check=True,
         )
 
-        out_dir = MODELS_DIR / dataset_name
         out_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(work_dir / "model.json", out_dir / "xgboost.json")
 
@@ -261,12 +276,11 @@ def _predict_proba(model: nn.Module, X: np.ndarray, device: torch.device, forwar
     return np.concatenate(chunks)
 
 
-def _save_model(model: tuple[nn.Module, StandardScaler], dataset_name: str, model_type: str) -> None:
+def _save_model(model: tuple[nn.Module, StandardScaler], out_dir: Path, model_type: str) -> None:
     """For lstm/ft_transformer only -- xgboost saves itself directly to its
     final destination in _train_xgboost, since its model object never
     safely exists in this (torch-loaded) process.
     """
-    out_dir = MODELS_DIR / dataset_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     net, scaler = model

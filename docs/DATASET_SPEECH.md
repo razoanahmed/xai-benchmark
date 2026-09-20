@@ -2,7 +2,7 @@
 
 **Cross-Domain Benchmarking of Explainable AI Techniques for Temporal Tabular Data**
 
-Status as of 2026-09-14: Stages 0–11 complete (data through analysis). Stage 12 (this document + the full write-up in `results/`) is in progress.
+Status as of 2026-09-14: all 13 stages (0 through 12, plus 6.5) complete. Full write-up in `docs/WRITEUP.md`.
 
 ---
 
@@ -40,4 +40,8 @@ No, not exactly — at the strictest bar (identical pairwise ordering across all
 
 ## What's left
 
-Stage 12: this document plus the full results write-up (`docs/WRITEUP.md`), consolidating everything above with the complete tables and figures.
+Nothing in the planned 13-stage scope — this document and `docs/WRITEUP.md` were the last deliverable. Three things remain genuinely open, none of them blocking:
+
+1. **Supervisor confirmation of the stage breakdown itself** — `docs/PROJECT_PLAN.md`'s 13 stages were inferred from `CLAUDE.md`, never checked against an actual syllabus or supervisor assignment. Worth a quick confirmation.
+2. **The `ca-central-1` SageMaker hourly rate used for cost figures is an unverified US-region estimate** — total cost is small enough ($0.65) that this doesn't change any conclusion, but the exact dollar figures in `docs/WRITEUP.md` §6 could be tightened if the real rate is checked.
+3. **The Sepsis SHAP-LIME divergence mechanism is unidentified** — `docs/WRITEUP.md` §4 rules out three candidate explanations but doesn't resolve what actually causes it. Stated there as future work, not a gap in this study's own scope.

@@ -103,7 +103,7 @@ With this, all 13 stages (0 through 12, plus 6.5) are complete.
 
 ## Open items before this plan is trustworthy
 
-1. `docs/METRICS.md` doesn't exist — needed before Stage 8.
+1. ~~`docs/METRICS.md` doesn't exist — needed before Stage 8.~~ **Resolved 2026-09-14** — written, see Stage 8 above.
 2. ~~`docs/DATASET_SPEECH.md` doesn't exist — needed for Stage 12, may be useful earlier too.~~ **Resolved 2026-09-14** — written, see Stage 12 above.
 3. Confirm this 13-stage breakdown matches whatever your supervisor actually assigned — this draft was inferred from `CLAUDE.md`, not sourced from a syllabus or supervisor doc.
 4. ~~Stage 6.5's AWS resources (S3 bucket, IAM role) and Stage 7's instance type aren't chosen yet.~~ **Resolved 2026-09-13**: bucket, role, and instance type (`ml.m5.xlarge`) all set up and verified — see Stage 6.5 above. Estimated full Stage 7 cost (see 2026-09-12 discussion, scaled from Stage 2's timing numbers): roughly $1-3, well inside the <$100 budget — dominated by per-job startup overhead across 27 Processing Jobs, not actual compute.
